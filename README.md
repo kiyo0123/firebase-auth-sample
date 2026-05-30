@@ -111,6 +111,63 @@ npm run dev
 
 ログイン後は UID・メール・表示名などが表示され、「ログアウト」で戻れます。
 
+---
+
+## デプロイ（Firebase Hosting）
+
+ビルドした静的ファイルを Firebase Hosting に公開します。
+※ デプロイには **自分の Firebase プロジェクト**が必要です（他人の共有プロジェクトには
+デプロイできません）。`src/firebase.ts` の config も自分のプロジェクトのものにしておきます。
+
+### 1. Firebase CLI を用意
+
+```bash
+npm install -g firebase-tools   # 初回のみ
+firebase login                  # ブラウザで Google ログイン
+```
+
+### 2. プロジェクトを紐付ける
+
+```bash
+firebase use <your-project-id>   # 例: firebase use my-auth-sample-1234
+```
+
+> `<your-project-id>` は Console の「プロジェクトの設定」やアプリの config の
+> `projectId` の値です。このコマンドでローカルに `.firebaserc` が作られ、
+> 「どのプロジェクトにデプロイするか」が決まります（CLI 操作の宛先＝`.firebaserc`）。
+
+### 3. デプロイ
+
+```bash
+firebase deploy
+```
+
+`firebase.json` の `predeploy` に `npm run build` を入れてあるので、**deploy 時に
+自動でビルド**され、`dist/` の内容が公開されます。完了すると
+`https://<your-project-id>.web.app` の URL が表示されます。
+
+> **Google ログインについて**: デプロイ後の `*.web.app` /
+> `*.firebaseapp.com` ドメインは自動で「承認済みドメイン」に追加されるので、
+> 公開サイトでもそのまま Google ログインが動きます。独自ドメインを使う場合のみ
+> Authentication > Settings > 承認済みドメイン に手動追加が必要です。
+
+### 設定ファイルについて
+
+リポジトリの `firebase.json` がデプロイ設定です。
+
+```json
+{
+  "hosting": {
+    "public": "dist",              // ビルド成果物のフォルダ
+    "rewrites": [{ "source": "**", "destination": "/index.html" }],  // SPA 用
+    "predeploy": ["npm run build"] // deploy 前に自動ビルド
+  }
+}
+```
+
+`.firebaserc`（プロジェクト紐付け）はローカル固有なので Git には含めていません
+（各自 `firebase use` で設定）。
+
 ## ディレクトリ構成
 
 ```

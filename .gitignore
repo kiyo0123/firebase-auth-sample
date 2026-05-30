@@ -9,6 +9,11 @@ dist
 .env.local
 .env.*.local
 
+# firebase (CLI のキャッシュ・ログ・プロジェクト紐付けはローカル固有)
+.firebase
+.firebaserc
+firebase-debug.log
+
 # logs
 *.log
 npm-debug.log*
