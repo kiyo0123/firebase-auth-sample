@@ -4,7 +4,7 @@ node_modules
 # build output
 dist
 
-# local env files (keep your real Firebase keys out of git)
+# local env files (このサンプルは未使用だが、念のため除外)
 .env
 .env.local
 .env.*.local
