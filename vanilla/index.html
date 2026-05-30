@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Firebase Auth Sample (Vanilla)</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 420px;
+        margin: 48px auto;
+        padding: 0 16px;
+        color: #1a1a2e;
+      }
+      h1 { font-size: 20px; }
+      .card {
+        border: 1px solid #e1e3ee;
+        border-radius: 12px;
+        padding: 20px;
+      }
+      input {
+        display: block;
+        width: 100%;
+        margin: 6px 0 12px;
+        padding: 9px 10px;
+        border: 1px solid #d5d7e3;
+        border-radius: 8px;
+        box-sizing: border-box;
+      }
+      button {
+        margin: 4px 4px 4px 0;
+        padding: 9px 14px;
+        border-radius: 8px;
+        border: 1px solid #3c439a;
+        background: #fff;
+        color: #3c439a;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button.primary { background: #3c439a; color: #fff; }
+      #error { color: #c0244a; font-size: 13px; min-height: 1em; }
+      #info { font-size: 14px; word-break: break-all; }
+      [hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <h1>Firebase Auth Sample (Vanilla)</h1>
+
+    <!--
+      フレームワーク無しの最小版です。React 版（リポジトリ root）と同じことを、
+      素の DOM 操作だけで実装しています。「Auth の仕組みそのもの」を、
+      React の作法（useState / useEffect / hooks）抜きで見るのが目的です。
+
+      ビルド不要。静的サーバーで開くだけで動きます:
+          npx serve vanilla        （または任意の静的サーバー）
+      ※ file:// で直接開くと認証が動かないので、必ず http で配信してください。
+    -->
+
+    <!-- 未ログイン時に出す部分 -->
+    <div id="signed-out" class="card">
+      <input id="email" type="email" placeholder="メールアドレス" />
+      <input id="password" type="password" placeholder="パスワード（6文字以上）" />
+      <button id="login" class="primary">ログイン</button>
+      <button id="signup">新規登録</button>
+      <hr />
+      <button id="google">Google でログイン</button>
+      <button id="anon">匿名でログイン</button>
+      <p id="error"></p>
+    </div>
+
+    <!-- ログイン中に出す部分（最初は隠しておく） -->
+    <div id="signed-in" class="card" hidden>
+      <p id="info"></p>
+      <button id="logout" class="primary">ログアウト</button>
+    </div>
+
+    <script type="module">
+      // === 1. SDK の読み込み ===
+      // React 版は npm の 'firebase' を import しますが、ここではビルド不要にするため
+      // CDN(ESM) から直接読み込みます。使う関数は React 版とまったく同じです。
+      import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
+      import {
+        getAuth,
+        createUserWithEmailAndPassword,
+        signInWithEmailAndPassword,
+        signInWithPopup,
+        GoogleAuthProvider,
+        signInAnonymously,
+        signOut,
+        onAuthStateChanged,
+      } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+
+      // === 2. 初期化（src/firebase.ts に相当）===
+      // 自分のプロジェクトで試すときは、この config を置き換えてください。
+      const firebaseConfig = {
+        apiKey: 'YOUR_API_KEY',
+        authDomain: 'your-project-id.firebaseapp.com',
+        projectId: 'your-project-id',
+        storageBucket: 'your-project-id.firebasestorage.app',
+        messagingSenderId: 'YOUR_SENDER_ID',
+        appId: 'YOUR_APP_ID',
+      };
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+
+      // DOM 要素の取得
+      const $ = (id) => document.getElementById(id);
+      const signedOut = $('signed-out');
+      const signedIn = $('signed-in');
+      const errorEl = $('error');
+
+      // === 3. ★ 心臓部：認証状態リスナー（src/hooks/useAuth.ts に相当）===
+      // ログイン/ログアウト/リロードのたびに呼ばれる。React 版はこの中で
+      // setUser() して再レンダリングさせるが、ここでは直接 DOM を書き換える。
+      // 「状態が変わったら UI を更新」が一直線に見えるのがポイント。
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          signedOut.hidden = true;
+          signedIn.hidden = false;
+          $('info').textContent =
+            `UID: ${user.uid}\n` +
+            `メール: ${user.email ?? '(なし)'}\n` +
+            `表示名: ${user.displayName ?? '(なし)'}\n` +
+            `匿名: ${user.isAnonymous ? 'はい' : 'いいえ'}`;
+          $('info').style.whiteSpace = 'pre-line';
+        } else {
+          signedOut.hidden = false;
+          signedIn.hidden = true;
+        }
+      });
+
+      // === 4. エラーを拾う共通ヘルパ（SignIn.tsx の run() に相当）===
+      // 成功時に「画面を切り替える」処理を書いていない点に注目。
+      // 画面の切り替えは上の onAuthStateChanged が自動でやってくれる。
+      async function run(action) {
+        errorEl.textContent = '';
+        try {
+          await action();
+        } catch (e) {
+          errorEl.textContent = e.message; // e.code に種類が入る
+        }
+      }
+
+      // === 5. ボタンと認証操作の結びつけ（auth.ts の各関数に相当）===
+      const email = () => $('email').value;
+      const password = () => $('password').value;
+
+      $('login').onclick = () =>
+        run(() => signInWithEmailAndPassword(auth, email(), password()));
+      $('signup').onclick = () =>
+        run(() => createUserWithEmailAndPassword(auth, email(), password()));
+      $('google').onclick = () =>
+        run(() => signInWithPopup(auth, new GoogleAuthProvider()));
+      $('anon').onclick = () => run(() => signInAnonymously(auth));
+      $('logout').onclick = () => signOut(auth);
+    </script>
+  </body>
+</html>

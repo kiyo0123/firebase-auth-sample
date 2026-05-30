@@ -4,8 +4,30 @@
 コードを参照しながら「何が・どこで・なぜ起きているか」を追っていきます。
 最後に手を動かす **Exercise（機能拡張課題）** を用意しています。
 
-- 対象コード: `src/` 以下
+- 対象コード: `src/` 以下（React 版）と `vanilla/index.html`（Vanilla 版）
 - 前提: React の `useState` / `useEffect` がなんとなく分かること
+
+---
+
+## この教材は 2 つの版があります（Vanilla → React の 2 段構え）
+
+同じ機能を **2 通り**で実装しています。学習効果を最大化するため、まず Vanilla で
+「Auth の素の仕組み」を掴み、次に React 版で「フレームワークに載せるとどうなるか」
+を理解する流れがおすすめです。
+
+| 版 | 場所 | 役割 | 動かし方 |
+|---|---|---|---|
+| **Vanilla 版** | `vanilla/index.html` | Auth の**仕組みそのもの**を最小コードで見る | `npx serve vanilla`（ビルド不要） |
+| **React 版** | `src/` 以下 | Firebase Auth を**React で使う作法**を学ぶ | `npm run dev` |
+
+- **Vanilla 版**は 1 ファイル・約 60 行。SDK の API とコードがほぼ 1:1 に対応していて、
+  「状態が変わったら DOM を書き換える」が一直線に追えます。
+- **React 版**は同じ Auth ロジックの上に React の作法（`useState`/`useEffect`/カスタム
+  フック）が乗ります。この「乗っている部分」は Auth の本質とは別物 ——
+  その切り分けは [後半の「React ならではの部分」](#react-ならではの部分auth-の本質と切り分ける) で解説します。
+
+> まず `vanilla/index.html` を開いて全体を眺めてから本メモを読むと、
+> 「どこまでが Firebase で、どこからが React か」がクリアになります。
 
 ---
 
@@ -244,6 +266,87 @@ export default function Profile({ user }: { user: User }) {
 
 ---
 
+## React ならではの部分（Auth の本質と切り分ける）
+
+ここが今回の肝のひとつです。React 版のコードには「Firebase Auth だから必要なもの」と
+「React だから必要なもの」が混ざっています。これを切り分けられると、他の
+フレームワーク（Vue, Svelte, 素の JS…）でも応用が効くようになります。
+
+### 切り分け表
+
+| 要素 | これは何のため？ | Vanilla 版では？ |
+|---|---|---|
+| `initializeApp` / `getAuth` | **Firebase 本質** | 同じく必要（`vanilla/index.html` にもある）|
+| `signInWith...` / `signOut` | **Firebase 本質** | まったく同じ API を呼ぶ |
+| `onAuthStateChanged` | **Firebase 本質**（状態リスナー）| まったく同じ。これが共通の核心 |
+| `User` オブジェクトの中身 | **Firebase 本質** | 同じ |
+| `useState(user)` | React 都合（状態を持って再描画させる）| **不要**。直接 DOM を書き換える |
+| `useEffect(..., [])` | React 都合（マウント時に 1 回だけ登録）| **不要**。スクリプト実行時に 1 回登録するだけ |
+| `return unsubscribe` | React 都合（アンマウント時に解除）| **不要**（ページ全体が消えるまで生きる）|
+| `loading` フラグ | React 都合（初回描画のチラつき対策）| ほぼ**不要**（コールバックが来てから描くため）|
+| カスタムフック `useAuth()` | React 都合（状態を部品化して共有）| **不要**（関数 1 個で完結）|
+
+つまり **「状態リスナー（onAuthStateChanged）を UI にどうつなぐか」** が
+フレームワークごとの差で、Auth の本体は完全に共通です。
+
+### 同じ処理を見比べる
+
+**onAuthStateChanged を UI に反映する部分**を、両版で並べてみます。
+
+Vanilla 版（`vanilla/index.html`）— **コールバックの中で直接 DOM を更新**:
+
+```js
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    signedOut.hidden = true;
+    signedIn.hidden = false;
+    info.textContent = `UID: ${user.uid} ...`;
+  } else {
+    signedOut.hidden = false;
+    signedIn.hidden = true;
+  }
+});
+```
+
+React 版（`src/hooks/useAuth.ts` + `App.tsx`）— **コールバックでは state を更新するだけ**:
+
+```ts
+// useAuth.ts: 「DOM を触る」代わりに「state を更新」する
+onAuthStateChanged(auth, (currentUser) => {
+  setUser(currentUser);   // ← ここが Vanilla の DOM 操作に当たる
+  setLoading(false);
+});
+```
+```tsx
+// App.tsx: 実際の表示切り替えは React が state を見て自動でやる
+{loading ? <p>読み込み中…</p> : user ? <Profile user={user} /> : <SignIn />}
+```
+
+**違いはここだけ**です:
+
+- Vanilla: 「状態が変わった → **自分で** DOM を書き換える」
+- React: 「状態が変わった → **state を更新するだけ**。描画は React が引き受ける」
+
+React の `useState`/`useEffect`/`useAuth` は、この「state を更新すれば自動で再描画」
+という仕組みを成立させるための“配管”です。Auth を理解する上では飾りなので、
+**まず Vanilla で核を押さえ、その後で「React はこの配管を足しているだけ」と捉える**と
+スッキリします。
+
+### なぜわざわざ React 版も学ぶのか
+
+実務のアプリはほぼフレームワーク上で動きます。そして **実際にハマるのは SDK 呼び出し
+ではなく「状態の配り方」**のほうです:
+
+- ユーザー情報をアプリの**あちこちの画面で共有**したい → カスタムフック `useAuth()`
+  や Context にまとめる（部品化）。Vanilla のようにグローバル変数で持つと破綻しやすい。
+- **リロード直後のチラつき**を防ぎたい → `loading` フラグ。
+- コンポーネントが**消えるときにリスナーを解除**したい → `useEffect` の cleanup。
+
+これらは「React で Auth を“ちゃんと”使う」ための定石です。Vanilla で本質を、
+React で実戦の作法を —— という二段構えにしている理由がここにあります。
+
+---
+
 ## 3. ログインの一連の流れ（シーケンス）
 
 「Google でログイン」を押したときの流れを通しで見てみましょう。
@@ -281,6 +384,22 @@ export default function Profile({ user }: { user: User }) {
 
 難易度順に並べています。**まずは自力で、詰まったらヒントとAPIを参照**してください。
 各 Exercise は独立しているので、好きなものから挑戦できます。
+
+### ⭐ Lv0. Vanilla 版で「発火タイミング」を観察する（まずこれ）
+
+**課題**: `vanilla/index.html` を動かし、`onAuthStateChanged` がいつ呼ばれるかを
+自分の目で確かめる。
+
+- 触るファイル: `vanilla/index.html`
+- 手順:
+  1. `npx serve vanilla` で開く。
+  2. `onAuthStateChanged` のコールバック先頭に
+     `console.log('auth 状態変化:', user)` を 1 行足す。
+  3. DevTools のコンソールを見ながら、**①ページ読み込み時 ②ログイン時
+     ③ログアウト時 ④リロード時** にそれぞれログが出るのを確認する。
+- 学び: 「ログイン操作」と「画面更新」が**別のタイミング**で起きていること、
+  リロードしてもログイン状態が**復元**されること（＝状態は Firebase が持っている）
+  を体感する。これが 0 章の「一方向の流れ」の実物です。
 
 ### ⭐ Lv1. プロフィールに項目を追加する
 
