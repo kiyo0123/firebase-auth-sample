@@ -4,10 +4,11 @@ node_modules
 # build output
 dist
 
-# local env files (このサンプルは未使用だが、念のため除外)
+# Firebase の config（リポジトリに含めない）
 .env
 .env.local
 .env.*.local
+vanilla/firebase-config.js
 
 # firebase (CLI のキャッシュ・ログ・プロジェクト紐付けはローカル固有)
 .firebase

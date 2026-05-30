@@ -90,16 +90,12 @@
         onAuthStateChanged,
       } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 
+      // config はリポジトリに含めないため、別ファイルから読み込みます。
+      //   1) firebase-config.example.js を firebase-config.js にコピー
+      //   2) Firebase Console の値を入れる（firebase-config.js は .gitignore で除外）
+      import { firebaseConfig } from './firebase-config.js';
+
       // === 2. 初期化（src/firebase.ts に相当）===
-      // 自分のプロジェクトで試すときは、この config を置き換えてください。
-      const firebaseConfig = {
-        apiKey: 'YOUR_API_KEY',
-        authDomain: 'your-project-id.firebaseapp.com',
-        projectId: 'your-project-id',
-        storageBucket: 'your-project-id.firebasestorage.app',
-        messagingSenderId: 'YOUR_SENDER_ID',
-        appId: 'YOUR_APP_ID',
-      };
       const app = initializeApp(firebaseConfig);
       const auth = getAuth(app);
 
